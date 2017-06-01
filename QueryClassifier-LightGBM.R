@@ -1,6 +1,6 @@
 library(caret)
 library(dplyr)
-library(xgboost)
+library(lightgbm)
 library(snowfall)
 sfInit(parallel=TRUE, cpus=2)
 
@@ -15,20 +15,18 @@ train <- traintest[trainindex,]
 test <- traintest[-trainindex,]
 
 testdeptt <- test$primarydeptt
-test$primarydeptt <- NULL
-
 
 # Prepare XGBoost Model
 categoryclassnos <- nlevels(train$primarydeptt)
+# Convert Factor to Numeric -1 (is it required??)
 trainlabelsfactored <- as.integer(train$primarydeptt) - 1
+test$primarydeptt <- NULL
 train$primarydeptt <- NULL
-test[] <- lapply(test,as.numeric)
-train[] <- lapply(train,as.numeric)
-
 
 # Prepare lightgbm model
-lgbtrain <- lgb.Dataset(data=data.matrix(train), label=data.matrix(trainlabelsfactored), 
-                        is_sparse=TRUE,colnames= as.list(colnames(train)))
+lgbtrain <- lgb.Dataset(data=data.matrix(train), 
+                        label=data.matrix(trainlabelsfactored), 
+                       colnames= as.list(colnames(train)))
 lgbtest <- lgb.Dataset.create.valid(lgbtrain, data = data.matrix(test))
 valids <- list(train = lgbtrain,test=lgbtest)
 
@@ -42,7 +40,7 @@ params <- list(objective="multiclass",
                num_threads = 2)
 
 
-lgb_model <- lgb.train(params, 
+fit.lgb <- lgb.train(params, 
                        data = lgbtrain, 
                        nrounds = 500,
                        num_leaves = 50,
@@ -56,7 +54,7 @@ end.time <- Sys.time()
 time.taken.lgbm <- round(end.time - start.time,2)
 time.taken.lgbm
 
-my_preds <- predict(fit.xgb, dtest, reshape = TRUE)
+predicted.lgb <- predict(fit.lgb, lgbtest, reshape = TRUE)
 
 # Check accuracy on training.
-mat <- confusionMatrix(predicted.xgb, testdeptt)
+mat <- confusionMatrix(predicted.lgb, testdeptt)
